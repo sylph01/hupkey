@@ -119,7 +119,7 @@ end
 
 def encap(pk_r)
   pkey_e = generate_key_pair()
-  dh = pkey_e.dh_compute_key(pk_r)
+  dh = pkey_e.dh_compute_key(pk_r.public_key)
   enc = serialize_public_key(pkey_e)
 
   pkrm = serialize_public_key(pk_r)
@@ -147,12 +147,56 @@ def encap_fixed(pk_r, ikm_e)
   }
 end
 
+def auth_encap(pk_r, sk_s)
+  pkey_e = generate_key_pair()
+  dh = pkey_e.dh_compute_key(pk_r.public_key) + sk_s.dh_compute_key(pk_r.public_key)
+  enc = serialize_public_key(pkey_e)
+
+  pkrm = serialize_public_key(pk_r)
+  pksm = serialize_public_key(sk_s)
+  kem_context = enc + pkrm + pksm
+
+  shared_secret = extract_and_expand(dh, kem_context, KEM_SUITE_ID)
+  {
+    shared_secret: shared_secret,
+    enc: enc
+  }
+end
+
+def auth_encap_fixed(pk_r, sk_s, ikm_e)
+  pkey_e = derive_key_pair(hex_to_str(ikm_e))
+  dh = pkey_e.dh_compute_key(pk_r.public_key) + sk_s.dh_compute_key(pk_r.public_key)
+  enc = serialize_public_key(pkey_e)
+
+  pkrm = serialize_public_key(pk_r)
+  pksm = serialize_public_key(sk_s)
+  kem_context = enc + pkrm + pksm
+
+  shared_secret = extract_and_expand(dh, kem_context, KEM_SUITE_ID)
+  {
+    shared_secret: shared_secret,
+    enc: enc
+  }
+end
+
 def decap(enc, sk_r)
   pk_e = deserialize_public_key(enc)
   dh = sk_r.dh_compute_key(pk_e.public_key)
 
   pkrm = serialize_public_key(sk_r)
   kem_context = enc + pkrm
+
+  shared_secret = extract_and_expand(dh, kem_context, KEM_SUITE_ID)
+  shared_secret
+end
+
+def auth_decap(enc, sk_r, pk_s)
+  pk_e = deserialize_public_key(enc)
+  dh = sk_r.dh_compute_key(pk_e.public_key) + sk_r.dh_compute_key(pk_s.public_key)
+
+  pkrm = serialize_public_key(sk_r)
+  pksm = serialize_public_key(pk_s)
+  kem_context = enc + pkrm + pksm
 
   shared_secret = extract_and_expand(dh, kem_context, KEM_SUITE_ID)
   shared_secret
@@ -269,7 +313,6 @@ puts cipher_open([key].pack('H*'), [base_nonce].pack('H*'), [aad].pack('H*'), [c
 puts pt
 
 puts ''
-
 puts '----psk mode----'
 
 pkem = '04305d35563527bce037773d79a13deabed0e8e7cde61eecee403496959e89e4d0ca701726696d1485137ccb5341b3c1c7aaee90a4a02449725e744b1193b53b5f'
@@ -300,6 +343,50 @@ puts shared_secret
 puts ''
 
 key_schedule = key_schedule_s(MODE_PSK, hex_to_str(shared_secret), hex_to_str(info), hex_to_str(psk), hex_to_str(psk_id))
+
+puts 'key_schedule key, base_nonce, exporter_secret:'
+puts key_schedule[:key].unpack1('H*')
+puts key_schedule[:base_nonce].unpack1('H*')
+puts key_schedule[:exporter_secret].unpack1('H*')
+puts 'key_schedule key, base_nonce, exporter_secret (expected):'
+puts key, base_nonce, exporter_secret
+puts ''
+
+puts ''
+puts '----auth mode----'
+
+pkem = '042224f3ea800f7ec55c03f29fc9865f6ee27004f818fcbdc6dc68932c1e52e15b79e264a98f2c535ef06745f3d308624414153b22c7332bc1e691cb4af4d53454'
+skem = '6b8de0873aed0c1b2d09b8c7ed54cbf24fdf1dfc7a47fa501f918810642d7b91'
+pkrm = '04423e363e1cd54ce7b7573110ac121399acbc9ed815fae03b72ffbd4c18b01836835c5a09513f28fc971b7266cfde2e96afe84bb0f266920e82c4f53b36e1a78d'
+skrm = 'd929ab4be2e59f6954d6bedd93e638f02d4046cef21115b00cdda2acb2a4440e'
+pksm = '04a817a0902bf28e036d66add5d544cc3a0457eab150f104285df1e293b5c10eef8651213e43d9cd9086c80b309df22cf37609f58c1127f7607e85f210b2804f73'
+sksm = '1120ac99fb1fccc1e8230502d245719d1b217fe20505c7648795139d177f0de9'
+shared_secret = 'd4aea336439aadf68f9348880aa358086f1480e7c167b6ef15453ba69b94b44f'
+key = '19aa8472b3fdc530392b0e54ca17c0f5'
+base_nonce = 'b390052d26b67a5b8a8fcaa4'
+exporter_secret = 'f152759972660eb0e1db880835abd5de1c39c8e9cd269f6f082ed80e28acb164'
+
+pkr = deserialize_public_key(hex_to_str(pkrm))
+sks = derive_key_pair(hex_to_str(sksm))
+
+encap_result = auth_encap_fixed(pkr, sks, skem)
+
+puts 'encap:'
+puts encap_result[:shared_secret].unpack1('H*')
+puts ''
+
+skr = derive_key_pair(hex_to_str(skrm))
+pks = deserialize_public_key(hex_to_str(pksm))
+decapped_secret = auth_decap(encap_result[:enc], skr, pks)
+
+puts 'decap:'
+puts decapped_secret.unpack1('H*')
+puts ''
+puts 'shared secret:'
+puts shared_secret
+puts ''
+
+key_schedule = key_schedule_s(MODE_AUTH, hex_to_str(shared_secret), hex_to_str(info))
 
 puts 'key_schedule key, base_nonce, exporter_secret:'
 puts key_schedule[:key].unpack1('H*')
