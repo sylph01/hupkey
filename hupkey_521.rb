@@ -162,9 +162,9 @@ def verify_psk_inputs(mode, psk, psk_id)
   got_psk = (psk != DEFAULT_PSK)
   got_psk_id = (psk_id != DEFAULT_PSK_ID)
 
-  raise Exception('Inconsistent PSK inputs') if got_psk != got_psk_id
-  raise Exception('PSK input provided when not needed') if got_psk && [MODE_BASE, MODE_AUTH].include?(mode)
-  raise Exception('Missing required PSK input') if !got_psk && [MODE_PSK, MODE_AUTH_PSK].include?(mode)
+  raise Exception.new('Inconsistent PSK inputs') if got_psk != got_psk_id
+  raise Exception.new('PSK input provided when not needed') if got_psk && [MODE_BASE, MODE_AUTH].include?(mode)
+  raise Exception.new('Missing required PSK input') if !got_psk && [MODE_PSK, MODE_AUTH_PSK].include?(mode)
 
   true
 end

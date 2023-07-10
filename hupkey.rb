@@ -162,9 +162,9 @@ def verify_psk_inputs(mode, psk, psk_id)
   got_psk = (psk != DEFAULT_PSK)
   got_psk_id = (psk_id != DEFAULT_PSK_ID)
 
-  raise Exception('Inconsistent PSK inputs') if got_psk != got_psk_id
-  raise Exception('PSK input provided when not needed') if got_psk && [MODE_BASE, MODE_AUTH].include?(mode)
-  raise Exception('Missing required PSK input') if !got_psk && [MODE_PSK, MODE_AUTH_PSK].include?(mode)
+  raise Exception.new('Inconsistent PSK inputs') if got_psk != got_psk_id
+  raise Exception.new('PSK input provided when not needed') if got_psk && [MODE_BASE, MODE_AUTH].include?(mode)
+  raise Exception.new('Missing required PSK input') if !got_psk && [MODE_PSK, MODE_AUTH_PSK].include?(mode)
 
   true
 end
@@ -175,8 +175,6 @@ def key_schedule(mode, shared_secret, info, psk = '', psk_id = '')
   psk_id_hash = labeled_extract('', 'psk_id_hash', psk_id, HPKE_SUITE_ID)
   info_hash = labeled_extract('', 'info_hash', info, HPKE_SUITE_ID)
   key_schedule_context = mode.chr + psk_id_hash + info_hash
-
-  puts key_schedule_context.unpack1('H*')
 
   secret = labeled_extract(shared_secret, 'secret', psk, HPKE_SUITE_ID)
 
@@ -218,9 +216,7 @@ end
 
 def cipher_open(key, nonce, aad, ct)
   ct_body = ct[0, ct.length - 16] # TODO: tag length might vary based on GCM length
-  puts ct_body.unpack1('H*')
   tag = ct[-16, 16]
-  puts tag.unpack1('H*')
   cipher = OpenSSL::Cipher.new('aes-128-gcm')
   cipher.decrypt
   cipher.key = key
@@ -271,3 +267,44 @@ puts ct
 
 puts cipher_open([key].pack('H*'), [base_nonce].pack('H*'), [aad].pack('H*'), [ct].pack('H*')).unpack1('H*')
 puts pt
+
+puts ''
+
+puts '----psk mode----'
+
+pkem = '04305d35563527bce037773d79a13deabed0e8e7cde61eecee403496959e89e4d0ca701726696d1485137ccb5341b3c1c7aaee90a4a02449725e744b1193b53b5f'
+pkrm = '040d97419ae99f13007a93996648b2674e5260a8ebd2b822e84899cd52d87446ea394ca76223b76639eccdf00e1967db10ade37db4e7db476261fcc8df97c5ffd1'
+skem = '57427244f6cc016cddf1c19c8973b4060aa13579b4c067fd5d93a5d74e32a90f'
+skrm = '438d8bcef33b89e0e9ae5eb0957c353c25a94584b0dd59c991372a75b43cb661'
+psk = '0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82'
+psk_id = '456e6e796e20447572696e206172616e204d6f726961'
+shared_secret = '2e783ad86a1beae03b5749e0f3f5e9bb19cb7eb382f2fb2dd64c99f15ae0661b'
+key_schedule_context = '01b873cdf2dff4c1434988053b7a775e980dd2039ea24f950b26b056ccedcb933198e486f9c9c09c9b5c753ac72d6005de254c607d1b534ed11d493ae1c1d9ac85'
+secret = 'f2f534e55931c62eeb2188c1f53450354a725183937e68c85e68d6b267504d26'
+key = '55d9eb9d26911d4c514a990fa8d57048'
+base_nonce = 'b595dc6b2d7e2ed23af529b1'
+exporter_secret = '895a723a1eab809804973a53c0ee18ece29b25a7555a4808277ad2651d66d705'
+
+pkr = deserialize_public_key(hex_to_str(pkrm))
+encap_result = encap_fixed(pkr, skem)
+puts 'encap:'
+puts encap_result[:shared_secret].unpack1('H*')
+puts ''
+skr = derive_key_pair(hex_to_str(skrm))
+decapped_secret = decap(encap_result[:enc], skr)
+puts 'decap:'
+puts decapped_secret.unpack1('H*')
+puts ''
+puts 'shared secret:'
+puts shared_secret
+puts ''
+
+key_schedule = key_schedule_s(MODE_PSK, hex_to_str(shared_secret), hex_to_str(info), hex_to_str(psk), hex_to_str(psk_id))
+
+puts 'key_schedule key, base_nonce, exporter_secret:'
+puts key_schedule[:key].unpack1('H*')
+puts key_schedule[:base_nonce].unpack1('H*')
+puts key_schedule[:exporter_secret].unpack1('H*')
+puts 'key_schedule key, base_nonce, exporter_secret (expected):'
+puts key, base_nonce, exporter_secret
+puts ''
