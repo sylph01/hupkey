@@ -18,6 +18,17 @@ pkey = OpenSSL::PKey.read(asn1_seq.to_der)
 
 puts Base64.encode64(pkey.private_to_der).delete("\n")
 
+asn1_seq_pub = OpenSSL::ASN1.Sequence([
+  OpenSSL::ASN1.Sequence([
+    OpenSSL::ASN1.ObjectId('1.3.101.110')
+  ]),
+  OpenSSL::ASN1.BitString(pkey.public_to_der[-32, 32])
+])
+
+puts pkey.public_to_der[-32, 32].unpack1('H*')
+pubkey = OpenSSL::PKey.read(asn1_seq_pub.to_der)
+puts pubkey.public_to_der[-32, 32].unpack1('H*')
+
 asn1_seq_448 = OpenSSL::ASN1.Sequence([
   OpenSSL::ASN1.Integer(0),
   OpenSSL::ASN1.Sequence([
@@ -30,3 +41,14 @@ puts Base64.encode64(asn1_seq_448.to_der).delete("\n")
 pkey448 = OpenSSL::PKey.read(asn1_seq_448.to_der)
 
 puts Base64.encode64(pkey448.private_to_der).delete("\n")
+
+asn1_seq_448_pub = OpenSSL::ASN1.Sequence([
+  OpenSSL::ASN1.Sequence([
+    OpenSSL::ASN1.ObjectId('1.3.101.111')
+  ]),
+  OpenSSL::ASN1.BitString(pkey448.public_to_der[-56, 56])
+])
+
+puts pkey448.public_to_der[-56, 56].unpack1('H*')
+pubkey448 = OpenSSL::PKey.read(asn1_seq_448_pub.to_der)
+puts pubkey448.public_to_der[-56, 56].unpack1('H*')
