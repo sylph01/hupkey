@@ -77,7 +77,7 @@ end
 def extract_and_expand(dh, kem_context, suite_id)
   eae_prk = labeled_extract('', 'eae_prk', dh, suite_id)
 
-  n_secret = 64 # P-521 uses 64, based on section 4.1
+  n_secret = 64 # this is based on length of SHA-512, which is 64 bytes
   labeled_expand(eae_prk, 'shared_secret', kem_context, n_secret, suite_id)
 end
 
@@ -247,6 +247,9 @@ decapped_secret = decap(encap_result[:enc], skr)
 puts ''
 puts 'decap:'
 puts decapped_secret.unpack1('H*')
+puts ''
+puts 'shared secret:'
+puts shared_secret
 puts ''
 
 key_schedule = key_schedule_s(MODE_BASE, hex_to_str(shared_secret), hex_to_str(info))

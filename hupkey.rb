@@ -77,7 +77,7 @@ end
 def extract_and_expand(dh, kem_context, suite_id)
   eae_prk = labeled_extract('', 'eae_prk', dh, suite_id)
 
-  n_secret = 32 # P-256 uses 32, based on section 4.1
+  n_secret = 32 # this is based on length of SHA-256, which is 32 bytes
   labeled_expand(eae_prk, 'shared_secret', kem_context, n_secret, suite_id)
 end
 
