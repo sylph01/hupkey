@@ -130,9 +130,20 @@ def encap_fixed(pk_r, ikm_e)
 
   shared_secret = extract_and_expand(dh, kem_context, 'KEM' + i2osp(16, 2))
   {
-    shared_secret: shared_secret.unpack1('H*'),
+    shared_secret: shared_secret,
     enc: enc
   }
+end
+
+def decap(enc, sk_r)
+  pk_e = deserialize_public_key(enc)
+  dh = sk_r.dh_compute_key(pk_e.public_key)
+
+  pkrm = serialize_public_key(sk_r)
+  kem_context = enc + pkrm
+
+  shared_secret = extract_and_expand(dh, kem_context, 'KEM' + i2osp(16, 2))
+  shared_secret
 end
 
 pkem = '04a92719c6195d5085104f469a8b9814d5838ff72b60501e2c4466e5e67b325ac98536d7b61a1af4b78e5b7f951c0900be863c403ce65c9bfcb9382657222d18c4'
@@ -145,5 +156,12 @@ pkr = deserialize_public_key(hex_to_str(pkrm))
 
 encap_result = encap_fixed(pkr, skem)
 
-puts encap_result[:shared_secret]
+puts 'encap:'
+puts encap_result[:shared_secret].unpack1('H*')
 puts encap_result[:enc].unpack1('H*')
+
+skr = derive_key_pair(hex_to_str(skrm))
+decapped_secret = decap(encap_result[:enc], skr)
+
+puts 'decap:'
+puts decapped_secret.unpack1('H*')
