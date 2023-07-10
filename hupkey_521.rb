@@ -176,8 +176,6 @@ def key_schedule(mode, shared_secret, info, psk = '', psk_id = '')
   info_hash = labeled_extract('', 'info_hash', info, HPKE_SUITE_ID)
   key_schedule_context = mode.chr + psk_id_hash + info_hash
 
-  puts key_schedule_context.unpack1('H*')
-
   secret = labeled_extract(shared_secret, 'secret', psk, HPKE_SUITE_ID)
 
   key = labeled_expand(secret, 'key', key_schedule_context, 32, HPKE_SUITE_ID) # Nk
@@ -240,19 +238,16 @@ key = '751e346ce8f0ddb2305c8a2a85c70d5cf559c53093656be636b9406d4d7d1b70'
 exporter_secret = 'e4ff9dfbc732a2b9c75823763c5ccc954a2c0648fc6de80a58581252d0ee3215388a4455e69086b50b87eb28c169a52f42e71de4ca61c920e7bd24c95cc3f992'
 base_nonce = '55ff7a7d739c69f44b25447b'
 
-p hex_to_str(key).length
-p hex_to_str(base_nonce).length
-p hex_to_str(exporter_secret).length
-
 pkr = deserialize_public_key(hex_to_str(pkrm))
 encap_result = encap_fixed(pkr, skem)
 puts 'encap:'
 puts encap_result[:shared_secret].unpack1('H*')
-puts encap_result[:enc].unpack1('H*')
 skr = derive_key_pair(hex_to_str(skrm))
 decapped_secret = decap(encap_result[:enc], skr)
+puts ''
 puts 'decap:'
 puts decapped_secret.unpack1('H*')
+puts ''
 
 key_schedule = key_schedule_s(MODE_BASE, hex_to_str(shared_secret), hex_to_str(info))
 
