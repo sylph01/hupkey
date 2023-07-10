@@ -395,3 +395,49 @@ puts key_schedule[:exporter_secret].unpack1('H*')
 puts 'key_schedule key, base_nonce, exporter_secret (expected):'
 puts key, base_nonce, exporter_secret
 puts ''
+
+puts ''
+puts '----authpsk mode----'
+
+pkem = '046a1de3fc26a3d43f4e4ba97dbe24f7e99181136129c48fbe872d4743e2b131357ed4f29a7b317dc22509c7b00991ae990bf65f8b236700c82ab7c11a84511401'
+skem = '36f771e411cf9cf72f0701ef2b991ce9743645b472e835fe234fb4d6eb2ff5a0'
+pkrm = '04d824d7e897897c172ac8a9e862e4bd820133b8d090a9b188b8233a64dfbc5f725aa0aa52c8462ab7c9188f1c4872f0c99087a867e8a773a13df48a627058e1b3'
+skrm = 'bdf4e2e587afdf0930644a0c45053889ebcadeca662d7c755a353d5b4e2a8394'
+pksm = '049f158c750e55d8d5ad13ede66cf6e79801634b7acadcad72044eac2ae1d0480069133d6488bf73863fa988c4ba8bde1c2e948b761274802b4d8012af4f13af9e'
+sksm = 'b0ed8721db6185435898650f7a677affce925aba7975a582653c4cb13c72d240'
+psk = '0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82'
+psk_id = '456e6e796e20447572696e206172616e204d6f726961'
+shared_secret = 'd4c27698391db126f1612d9e91a767f10b9b19aa17e1695549203f0df7d9aebe'
+key = '4d567121d67fae1227d90e11585988fb'
+base_nonce = '67c9d05330ca21e5116ecda6'
+exporter_secret = '3f479020ae186788e4dfd4a42a21d24f3faabb224dd4f91c2b2e5e9524ca27b2'
+
+pkr = deserialize_public_key(hex_to_str(pkrm))
+sks = derive_key_pair(hex_to_str(sksm))
+
+encap_result = auth_encap_fixed(pkr, sks, skem)
+
+puts 'encap:'
+puts encap_result[:shared_secret].unpack1('H*')
+puts ''
+
+skr = derive_key_pair(hex_to_str(skrm))
+pks = deserialize_public_key(hex_to_str(pksm))
+decapped_secret = auth_decap(encap_result[:enc], skr, pks)
+
+puts 'decap:'
+puts decapped_secret.unpack1('H*')
+puts ''
+puts 'shared secret:'
+puts shared_secret
+puts ''
+
+key_schedule = key_schedule_s(MODE_AUTH_PSK, hex_to_str(shared_secret), hex_to_str(info), hex_to_str(psk), hex_to_str(psk_id))
+
+puts 'key_schedule key, base_nonce, exporter_secret:'
+puts key_schedule[:key].unpack1('H*')
+puts key_schedule[:base_nonce].unpack1('H*')
+puts key_schedule[:exporter_secret].unpack1('H*')
+puts 'key_schedule key, base_nonce, exporter_secret (expected):'
+puts key, base_nonce, exporter_secret
+puts ''
