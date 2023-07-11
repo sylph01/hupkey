@@ -230,8 +230,6 @@ class Context
     xor(@base_nonce, seq_bytes)
   end
 
-  private
-
   def increment_seq
     raise Exception.new('MessageLimitReachedError') if @sequence_number >= (1 << (8 * N_N)) - 1
 
@@ -343,20 +341,27 @@ def test(vec)
   puts vec[:key], vec[:base_nonce], vec[:exporter_secret]
   puts ''
 
-  vec[:enc_vecs].each do |enc_vec|
-    puts "seq: #{enc_vec[:seq]}"
-    puts "computed nonce: #{key_schedule_s_inst.compute_nonce(enc_vec[:seq]).unpack1('H*')}"
-    puts "expected nonce: #{enc_vec[:nonce]}"
+  for iter in 0..vec[:max_seq] do
+    if vec[:enc_vecs][iter]
+      enc_vec = vec[:enc_vecs][iter]
+      puts "seq: #{iter}"
+      puts "seq in key_schedule_s: #{key_schedule_s_inst.sequence_number}"
+      puts "computed nonce: #{key_schedule_s_inst.compute_nonce(iter).unpack1('H*')}"
+      puts "expected nonce: #{enc_vec[:nonce]}"
 
-    ct = key_schedule_s_inst.seal([enc_vec[:aad]].pack('H*'), [enc_vec[:pt]].pack('H*'))
-    puts "ct(got): #{ct.unpack1('H*')}"
-    puts "ct(exp): #{enc_vec[:ct]}"
+      ct = key_schedule_s_inst.seal([enc_vec[:aad]].pack('H*'), [enc_vec[:pt]].pack('H*'))
+      puts "ct(got): #{ct.unpack1('H*')}"
+      puts "ct(exp): #{enc_vec[:ct]}"
 
-    pt = key_schedule_r_inst.open([enc_vec[:aad]].pack('H*'), [enc_vec[:ct]].pack('H*'))
-    puts "pt(got): #{pt.unpack1('H*')}"
-    puts "pt(exp): #{enc_vec[:pt]}"
+      pt = key_schedule_r_inst.open([enc_vec[:aad]].pack('H*'), [enc_vec[:ct]].pack('H*'))
+      puts "pt(got): #{pt.unpack1('H*')}"
+      puts "pt(exp): #{enc_vec[:pt]}"
 
-    puts ''
+      puts ''
+    else
+      key_schedule_s_inst.increment_seq
+      key_schedule_r_inst.increment_seq
+    end
   end
 end
 
@@ -372,29 +377,34 @@ test({
   exporter_secret: '14ad94af484a7ad3ef40e9f3be99ecc6fa9036df9d4920548424df127ee0d99f',
   psk: '',
   psk_id: '',
-  enc_vecs: [
-    {
+  enc_vecs: {
+    0 => {
       seq: 0,
       aad: '436f756e742d30',
       nonce: '4e0bc5018beba4bf004cca59',
       pt: '4265617574792069732074727574682c20747275746820626561757479',
       ct: '5ad590bb8baa577f8619db35a36311226a896e7342a6d836d8b7bcd2f20b6c7f9076ac232e3ab2523f39513434'
     },
-    {
-      seq: 1,
+    1 => {
       aad: '436f756e742d31',
       nonce: '4e0bc5018beba4bf004cca58',
       pt: '4265617574792069732074727574682c20747275746820626561757479',
       ct: 'fa6f037b47fc21826b610172ca9637e82d6e5801eb31cbd3748271affd4ecb06646e0329cbdf3c3cd655b28e82'
     },
-    {
-      seq: 2,
+    2 => {
       aad: '436f756e742d32',
       nonce: '4e0bc5018beba4bf004cca5b',
       pt: '4265617574792069732074727574682c20747275746820626561757479',
       ct: '895cabfac50ce6c6eb02ffe6c048bf53b7f7be9a91fc559402cbc5b8dcaeb52b2ccc93e466c28fb55fed7a7fec'
     },
-  ]
+    255 => {
+      aad: '436f756e742d323535',
+      nonce: '4e0bc5018beba4bf004ccaa6',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '2ad71c85bf3f45c6eca301426289854b31448bcf8a8ccb1deef3ebd87f60848aa53c538c30a4dac71d619ee2cd'
+    }
+  },
+  max_seq: 256
 })
 
 test({
@@ -409,27 +419,31 @@ test({
   exporter_secret: '895a723a1eab809804973a53c0ee18ece29b25a7555a4808277ad2651d66d705',
   psk: '0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82',
   psk_id: '456e6e796e20447572696e206172616e204d6f726961',
-  enc_vecs: [
-    {
-      seq: 0,
+  enc_vecs: {
+    0 => {
       aad: '436f756e742d30',
       nonce: 'b595dc6b2d7e2ed23af529b1',
       pt: '4265617574792069732074727574682c20747275746820626561757479',
       ct: '90c4deb5b75318530194e4bb62f890b019b1397bbf9d0d6eb918890e1fb2be1ac2603193b60a49c2126b75d0eb'
     },
-    {
-      seq: 1,
+    1 => {
       aad: '436f756e742d31',
       nonce: 'b595dc6b2d7e2ed23af529b0',
       pt: '4265617574792069732074727574682c20747275746820626561757479',
       ct: '9e223384a3620f4a75b5a52f546b7262d8826dea18db5a365feb8b997180b22d72dc1287f7089a1073a7102c27'
     },
-    {
-      seq: 2,
+    2 => {
       aad: '436f756e742d32',
       nonce: 'b595dc6b2d7e2ed23af529b3',
       pt: '4265617574792069732074727574682c20747275746820626561757479',
       ct: 'adf9f6000773035023be7d415e13f84c1cb32a24339a32eb81df02be9ddc6abc880dd81cceb7c1d0c7781465b2'
     },
-  ]
+    255 => {
+      aad: '436f756e742d323535',
+      nonce: 'b595dc6b2d7e2ed23af5294e',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: 'cdc541253111ed7a424eea5134dc14fc5e8293ab3b537668b8656789628e45894e5bb873c968e3b7cdcbb654a4'
+    }
+  },
+  max_seq: 256
 })
