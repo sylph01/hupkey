@@ -321,14 +321,24 @@ def test(vec)
 
   puts 'encap'
   pkr = deserialize_public_key([vec[:pkrm]].pack('H*'))
-  encap_result = encap_fixed(pkr, vec[:skem])
+  if [MODE_BASE, MODE_PSK].include?(vec[:mode])
+    encap_result = encap_fixed(pkr, vec[:skem])
+  else
+    sks = derive_key_pair([vec[:sksm]].pack('H*'))
+    encap_result = auth_encap_fixed(pkr, sks, vec[:skem])
+  end
   puts "shared_secret(got): #{encap_result[:shared_secret].unpack1('H*')}"
   puts "shared_secret(exp): #{vec[:shared_secret]}"
   puts ''
 
   puts 'decap'
   skr = derive_key_pair([vec[:skrm]].pack('H*'))
-  decapped_secret = decap(encap_result[:enc], skr)
+  if [MODE_BASE, MODE_PSK].include?(vec[:mode])
+    decapped_secret = decap(encap_result[:enc], skr)
+  else
+    pks = deserialize_public_key([vec[:pksm]].pack('H*'))
+    decapped_secret = auth_decap(encap_result[:enc], skr, pks)
+  end
   puts "decapped_secret: #{decapped_secret.unpack1('H*')}"
   puts ''
 
@@ -443,6 +453,49 @@ test({
       nonce: 'b595dc6b2d7e2ed23af5294e',
       pt: '4265617574792069732074727574682c20747275746820626561757479',
       ct: 'cdc541253111ed7a424eea5134dc14fc5e8293ab3b537668b8656789628e45894e5bb873c968e3b7cdcbb654a4'
+    }
+  },
+  max_seq: 256
+})
+
+test({
+  mode: MODE_AUTH,
+  pkrm: '04423e363e1cd54ce7b7573110ac121399acbc9ed815fae03b72ffbd4c18b01836835c5a09513f28fc971b7266cfde2e96afe84bb0f266920e82c4f53b36e1a78d',
+  skem: '6b8de0873aed0c1b2d09b8c7ed54cbf24fdf1dfc7a47fa501f918810642d7b91',
+  skrm: 'd929ab4be2e59f6954d6bedd93e638f02d4046cef21115b00cdda2acb2a4440e',
+  pksm: '04a817a0902bf28e036d66add5d544cc3a0457eab150f104285df1e293b5c10eef8651213e43d9cd9086c80b309df22cf37609f58c1127f7607e85f210b2804f73',
+  sksm: '1120ac99fb1fccc1e8230502d245719d1b217fe20505c7648795139d177f0de9',
+  shared_secret: 'd4aea336439aadf68f9348880aa358086f1480e7c167b6ef15453ba69b94b44f',
+  info: '4f6465206f6e2061204772656369616e2055726e',
+  key: '19aa8472b3fdc530392b0e54ca17c0f5',
+  base_nonce: 'b390052d26b67a5b8a8fcaa4',
+  exporter_secret: 'f152759972660eb0e1db880835abd5de1c39c8e9cd269f6f082ed80e28acb164',
+  psk: '',
+  psk_id: '',
+  enc_vecs: {
+    0 => {
+      aad: '436f756e742d30',
+      nonce: 'b390052d26b67a5b8a8fcaa4',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '82ffc8c44760db691a07c5627e5fc2c08e7a86979ee79b494a17cc3405446ac2bdb8f265db4a099ed3289ffe19'
+    },
+    1 => {
+      aad: '436f756e742d31',
+      nonce: 'b390052d26b67a5b8a8fcaa5',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: 'b0a705a54532c7b4f5907de51c13dffe1e08d55ee9ba59686114b05945494d96725b239468f1229e3966aa1250'
+    },
+    2 => {
+      aad: '436f756e742d32',
+      nonce: 'b390052d26b67a5b8a8fcaa6',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '8dc805680e3271a801790833ed74473710157645584f06d1b53ad439078d880b23e25256663178271c80ee8b7c'
+    },
+    255 => {
+      aad: '436f756e742d323535',
+      nonce: 'b390052d26b67a5b8a8fca5b',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '4a319462eaedee37248b4d985f64f4f863d31913fe9e30b6e13136053b69fe5d70853c84c60a84bb5495d5a678'
     }
   },
   max_seq: 256
