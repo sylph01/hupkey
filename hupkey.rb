@@ -213,6 +213,77 @@ def verify_psk_inputs(mode, psk, psk_id)
   true
 end
 
+class Context
+  attr_reader :key, :base_nonce, :sequence_number, :exporter_secret
+
+  N_N = 12
+
+  def initialize(initializer_hash)
+    @key = initializer_hash[:key]
+    @base_nonce = initializer_hash[:base_nonce]
+    @sequence_number = initializer_hash[:sequence_number]
+    @exporter_secret = initializer_hash[:exporter_secret]
+  end
+
+  def compute_nonce(seq)
+    seq_bytes = i2osp(seq, N_N)
+    xor(@base_nonce, seq_bytes)
+  end
+
+  private
+
+  def increment_seq
+    raise Exception.new('MessageLimitReachedError') if @sequence_number >= (1 << (8 * N_N)) - 1
+
+    @sequence_number += 1
+  end
+end
+
+class ContextS < Context
+  def seal(aad, pt)
+    ct = cipher_seal(@key, compute_nonce(@sequence_number), aad, pt)
+    increment_seq
+    ct
+  end
+
+  private
+
+  def cipher_seal(key, nonce, aad, pt)
+    cipher = OpenSSL::Cipher.new('aes-128-gcm')
+    cipher.encrypt
+    cipher.key = key
+    cipher.iv = nonce
+    cipher.auth_data = aad
+    cipher.padding = 0
+    s = cipher.update(pt) << cipher.final
+    s + cipher.auth_tag
+  end
+end
+
+class ContextR < Context
+  def open(aad, ct)
+    pt = cipher_open(@key, compute_nonce(@sequence_number), aad, ct)
+    # catch openerror then send out own openerror
+    increment_seq
+    pt
+  end
+
+  private
+
+  def cipher_open(key, nonce, aad, ct)
+    ct_body = ct[0, ct.length - 16] # TODO: tag length might vary based on GCM length
+    tag = ct[-16, 16]
+    cipher = OpenSSL::Cipher.new('aes-128-gcm')
+    cipher.decrypt
+    cipher.key = key
+    cipher.iv = nonce
+    cipher.auth_tag = tag
+    cipher.auth_data = aad
+    cipher.padding = 0
+    cipher.update(ct_body) << cipher.final
+  end
+end
+
 def key_schedule(mode, shared_secret, info, psk = '', psk_id = '')
   verify_psk_inputs(mode, psk, psk_id)
 
@@ -227,7 +298,6 @@ def key_schedule(mode, shared_secret, info, psk = '', psk_id = '')
   exporter_secret = labeled_expand(secret, 'exp', key_schedule_context, 32, HPKE_SUITE_ID) # Nh
 
   {
-    type: nil,
     key: key,
     base_nonce: base_nonce,
     sequence_number: 0,
@@ -237,207 +307,88 @@ end
 
 def key_schedule_s(mode, shared_secret, info, psk = '', psk_id = '')
   ks = key_schedule(mode, shared_secret, info, psk, psk_id)
-  ks[:type] = :s
-  ks
+  ContextS.new(ks)
 end
 
-def key_schedule_r(mode, shared_secret, info, psk, psk_id)
+def key_schedule_r(mode, shared_secret, info, psk = '', psk_id = '')
   ks = key_schedule(mode, shared_secret, info, psk, psk_id)
-  ks[:type] = :r
-  ks
+  ContextR.new(ks)
 end
 
-def cipher_seal(key, nonce, aad, pt)
-  cipher = OpenSSL::Cipher.new('aes-128-gcm')
-  cipher.encrypt
-  cipher.key = key
-  cipher.iv = nonce
-  cipher.auth_data = aad
-  cipher.padding = 0
-  s = cipher.update(pt) << cipher.final
-  s + cipher.auth_tag
+def test(vec)
+  puts "mode: #{vec[:mode]}"
+  puts ''
+
+  puts 'encap'
+  pkr = deserialize_public_key([vec[:pkrm]].pack('H*'))
+  encap_result = encap_fixed(pkr, vec[:skem])
+  puts "shared_secret(got): #{encap_result[:shared_secret].unpack1('H*')}"
+  puts "shared_secret(exp): #{vec[:shared_secret]}"
+  puts ''
+
+  puts 'decap'
+  skr = derive_key_pair([vec[:skrm]].pack('H*'))
+  decapped_secret = decap(encap_result[:enc], skr)
+  puts "decapped_secret: #{decapped_secret.unpack1('H*')}"
+  puts ''
+
+  puts 'key schedule'
+  key_schedule_s_inst = key_schedule_s(vec[:mode], hex_to_str(vec[:shared_secret]), hex_to_str(vec[:info]))
+  key_schedule_r_inst = key_schedule_r(vec[:mode], hex_to_str(vec[:shared_secret]), hex_to_str(vec[:info]))
+  puts 'key, base_nonce, exporter_secret (got):'
+  puts key_schedule_s_inst.key.unpack1('H*'), key_schedule_s_inst.base_nonce.unpack1('H*'), key_schedule_s_inst.exporter_secret.unpack1('H*')
+  puts 'key, base_nonce, exporter_secret (expected):'
+  puts vec[:key], vec[:base_nonce], vec[:exporter_secret]
+  puts ''
+
+  vec[:enc_vecs].each do |enc_vec|
+    puts "seq: #{enc_vec[:seq]}"
+    puts "computed nonce: #{key_schedule_s_inst.compute_nonce(enc_vec[:seq]).unpack1('H*')}"
+    puts "expected nonce: #{enc_vec[:nonce]}"
+
+    ct = key_schedule_s_inst.seal([enc_vec[:aad]].pack('H*'), [enc_vec[:pt]].pack('H*'))
+    puts "ct(got): #{ct.unpack1('H*')}"
+    puts "ct(exp): #{enc_vec[:ct]}"
+
+    pt = key_schedule_r_inst.open([enc_vec[:aad]].pack('H*'), [enc_vec[:ct]].pack('H*'))
+    puts "pt(got): #{pt.unpack1('H*')}"
+    puts "pt(exp): #{enc_vec[:pt]}"
+
+    puts ''
+  end
 end
 
-def cipher_open(key, nonce, aad, ct)
-  ct_body = ct[0, ct.length - 16] # TODO: tag length might vary based on GCM length
-  tag = ct[-16, 16]
-  cipher = OpenSSL::Cipher.new('aes-128-gcm')
-  cipher.decrypt
-  cipher.key = key
-  cipher.iv = nonce
-  cipher.auth_tag = tag
-  cipher.auth_data = aad
-  cipher.padding = 0
-  cipher.update(ct_body) << cipher.final
-end
-
-pkem = '04a92719c6195d5085104f469a8b9814d5838ff72b60501e2c4466e5e67b325ac98536d7b61a1af4b78e5b7f951c0900be863c403ce65c9bfcb9382657222d18c4'
-pkrm = '04fe8c19ce0905191ebc298a9245792531f26f0cece2460639e8bc39cb7f706a826a779b4cf969b8a0e539c7f62fb3d30ad6aa8f80e30f1d128aafd68a2ce72ea0'
-skem = '4995788ef4b9d6132b249ce59a77281493eb39af373d236a1fe415cb0c2d7beb'
-skrm = 'f3ce7fdae57e1a310d87f1ebbde6f328be0a99cdbcadf4d6589cf29de4b8ffd2'
-ikme = '4270e54ffd08d79d5928020af4686d8f6b7d35dbe470265f1f5aa22816ce860e'
-shared_secret = 'c0d26aeab536609a572b07695d933b589dcf363ff9d93c93adea537aeabb8cb8'
-info = '4f6465206f6e2061204772656369616e2055726e'
-key = '868c066ef58aae6dc589b6cfdd18f97e'
-exporter_secret = '14ad94af484a7ad3ef40e9f3be99ecc6fa9036df9d4920548424df127ee0d99f'
-
-# p hex_to_str(key).length
-# p hex_to_str(base_nonce).length
-# p hex_to_str(exporter_secret).length
-
-# pkr = deserialize_public_key(hex_to_str(pkrm))
-# encap_result = encap_fixed(pkr, skem)
-# puts 'encap:'
-# puts encap_result[:shared_secret].unpack1('H*')
-# puts encap_result[:enc].unpack1('H*')
-# skr = derive_key_pair(hex_to_str(skrm))
-# decapped_secret = decap(encap_result[:enc], skr)
-# puts 'decap:'
-# puts decapped_secret.unpack1('H*')
-
-key_schedule = key_schedule_s(MODE_BASE, hex_to_str(shared_secret), hex_to_str(info))
-
-puts key_schedule[:key].unpack1('H*')
-puts key_schedule[:base_nonce].unpack1('H*')
-puts key_schedule[:exporter_secret].unpack1('H*')
-
-base_nonce = '4e0bc5018beba4bf004cca59'
-aad = '436f756e742d30'
-pt  = '4265617574792069732074727574682c20747275746820626561757479'
-ct  = '5ad590bb8baa577f8619db35a36311226a896e7342a6d836d8b7bcd2f20b6c7f9076ac232e3ab2523f39513434'
-
-puts cipher_seal([key].pack('H*'), [base_nonce].pack('H*'), [aad].pack('H*'), [pt].pack('H*')).unpack1('H*')
-puts ct
-
-puts cipher_open([key].pack('H*'), [base_nonce].pack('H*'), [aad].pack('H*'), [ct].pack('H*')).unpack1('H*')
-puts pt
-
-puts ''
-puts '----psk mode----'
-
-pkem = '04305d35563527bce037773d79a13deabed0e8e7cde61eecee403496959e89e4d0ca701726696d1485137ccb5341b3c1c7aaee90a4a02449725e744b1193b53b5f'
-pkrm = '040d97419ae99f13007a93996648b2674e5260a8ebd2b822e84899cd52d87446ea394ca76223b76639eccdf00e1967db10ade37db4e7db476261fcc8df97c5ffd1'
-skem = '57427244f6cc016cddf1c19c8973b4060aa13579b4c067fd5d93a5d74e32a90f'
-skrm = '438d8bcef33b89e0e9ae5eb0957c353c25a94584b0dd59c991372a75b43cb661'
-psk = '0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82'
-psk_id = '456e6e796e20447572696e206172616e204d6f726961'
-shared_secret = '2e783ad86a1beae03b5749e0f3f5e9bb19cb7eb382f2fb2dd64c99f15ae0661b'
-key_schedule_context = '01b873cdf2dff4c1434988053b7a775e980dd2039ea24f950b26b056ccedcb933198e486f9c9c09c9b5c753ac72d6005de254c607d1b534ed11d493ae1c1d9ac85'
-secret = 'f2f534e55931c62eeb2188c1f53450354a725183937e68c85e68d6b267504d26'
-key = '55d9eb9d26911d4c514a990fa8d57048'
-base_nonce = 'b595dc6b2d7e2ed23af529b1'
-exporter_secret = '895a723a1eab809804973a53c0ee18ece29b25a7555a4808277ad2651d66d705'
-
-pkr = deserialize_public_key(hex_to_str(pkrm))
-encap_result = encap_fixed(pkr, skem)
-puts 'encap:'
-puts encap_result[:shared_secret].unpack1('H*')
-puts ''
-skr = derive_key_pair(hex_to_str(skrm))
-decapped_secret = decap(encap_result[:enc], skr)
-puts 'decap:'
-puts decapped_secret.unpack1('H*')
-puts ''
-puts 'shared secret:'
-puts shared_secret
-puts ''
-
-key_schedule = key_schedule_s(MODE_PSK, hex_to_str(shared_secret), hex_to_str(info), hex_to_str(psk), hex_to_str(psk_id))
-
-puts 'key_schedule key, base_nonce, exporter_secret:'
-puts key_schedule[:key].unpack1('H*')
-puts key_schedule[:base_nonce].unpack1('H*')
-puts key_schedule[:exporter_secret].unpack1('H*')
-puts 'key_schedule key, base_nonce, exporter_secret (expected):'
-puts key, base_nonce, exporter_secret
-puts ''
-
-puts ''
-puts '----auth mode----'
-
-pkem = '042224f3ea800f7ec55c03f29fc9865f6ee27004f818fcbdc6dc68932c1e52e15b79e264a98f2c535ef06745f3d308624414153b22c7332bc1e691cb4af4d53454'
-skem = '6b8de0873aed0c1b2d09b8c7ed54cbf24fdf1dfc7a47fa501f918810642d7b91'
-pkrm = '04423e363e1cd54ce7b7573110ac121399acbc9ed815fae03b72ffbd4c18b01836835c5a09513f28fc971b7266cfde2e96afe84bb0f266920e82c4f53b36e1a78d'
-skrm = 'd929ab4be2e59f6954d6bedd93e638f02d4046cef21115b00cdda2acb2a4440e'
-pksm = '04a817a0902bf28e036d66add5d544cc3a0457eab150f104285df1e293b5c10eef8651213e43d9cd9086c80b309df22cf37609f58c1127f7607e85f210b2804f73'
-sksm = '1120ac99fb1fccc1e8230502d245719d1b217fe20505c7648795139d177f0de9'
-shared_secret = 'd4aea336439aadf68f9348880aa358086f1480e7c167b6ef15453ba69b94b44f'
-key = '19aa8472b3fdc530392b0e54ca17c0f5'
-base_nonce = 'b390052d26b67a5b8a8fcaa4'
-exporter_secret = 'f152759972660eb0e1db880835abd5de1c39c8e9cd269f6f082ed80e28acb164'
-
-pkr = deserialize_public_key(hex_to_str(pkrm))
-sks = derive_key_pair(hex_to_str(sksm))
-
-encap_result = auth_encap_fixed(pkr, sks, skem)
-
-puts 'encap:'
-puts encap_result[:shared_secret].unpack1('H*')
-puts ''
-
-skr = derive_key_pair(hex_to_str(skrm))
-pks = deserialize_public_key(hex_to_str(pksm))
-decapped_secret = auth_decap(encap_result[:enc], skr, pks)
-
-puts 'decap:'
-puts decapped_secret.unpack1('H*')
-puts ''
-puts 'shared secret:'
-puts shared_secret
-puts ''
-
-key_schedule = key_schedule_s(MODE_AUTH, hex_to_str(shared_secret), hex_to_str(info))
-
-puts 'key_schedule key, base_nonce, exporter_secret:'
-puts key_schedule[:key].unpack1('H*')
-puts key_schedule[:base_nonce].unpack1('H*')
-puts key_schedule[:exporter_secret].unpack1('H*')
-puts 'key_schedule key, base_nonce, exporter_secret (expected):'
-puts key, base_nonce, exporter_secret
-puts ''
-
-puts ''
-puts '----authpsk mode----'
-
-pkem = '046a1de3fc26a3d43f4e4ba97dbe24f7e99181136129c48fbe872d4743e2b131357ed4f29a7b317dc22509c7b00991ae990bf65f8b236700c82ab7c11a84511401'
-skem = '36f771e411cf9cf72f0701ef2b991ce9743645b472e835fe234fb4d6eb2ff5a0'
-pkrm = '04d824d7e897897c172ac8a9e862e4bd820133b8d090a9b188b8233a64dfbc5f725aa0aa52c8462ab7c9188f1c4872f0c99087a867e8a773a13df48a627058e1b3'
-skrm = 'bdf4e2e587afdf0930644a0c45053889ebcadeca662d7c755a353d5b4e2a8394'
-pksm = '049f158c750e55d8d5ad13ede66cf6e79801634b7acadcad72044eac2ae1d0480069133d6488bf73863fa988c4ba8bde1c2e948b761274802b4d8012af4f13af9e'
-sksm = 'b0ed8721db6185435898650f7a677affce925aba7975a582653c4cb13c72d240'
-psk = '0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82'
-psk_id = '456e6e796e20447572696e206172616e204d6f726961'
-shared_secret = 'd4c27698391db126f1612d9e91a767f10b9b19aa17e1695549203f0df7d9aebe'
-key = '4d567121d67fae1227d90e11585988fb'
-base_nonce = '67c9d05330ca21e5116ecda6'
-exporter_secret = '3f479020ae186788e4dfd4a42a21d24f3faabb224dd4f91c2b2e5e9524ca27b2'
-
-pkr = deserialize_public_key(hex_to_str(pkrm))
-sks = derive_key_pair(hex_to_str(sksm))
-
-encap_result = auth_encap_fixed(pkr, sks, skem)
-
-puts 'encap:'
-puts encap_result[:shared_secret].unpack1('H*')
-puts ''
-
-skr = derive_key_pair(hex_to_str(skrm))
-pks = deserialize_public_key(hex_to_str(pksm))
-decapped_secret = auth_decap(encap_result[:enc], skr, pks)
-
-puts 'decap:'
-puts decapped_secret.unpack1('H*')
-puts ''
-puts 'shared secret:'
-puts shared_secret
-puts ''
-
-key_schedule = key_schedule_s(MODE_AUTH_PSK, hex_to_str(shared_secret), hex_to_str(info), hex_to_str(psk), hex_to_str(psk_id))
-
-puts 'key_schedule key, base_nonce, exporter_secret:'
-puts key_schedule[:key].unpack1('H*')
-puts key_schedule[:base_nonce].unpack1('H*')
-puts key_schedule[:exporter_secret].unpack1('H*')
-puts 'key_schedule key, base_nonce, exporter_secret (expected):'
-puts key, base_nonce, exporter_secret
-puts ''
+test({
+  mode: MODE_BASE,
+  pkrm: '04fe8c19ce0905191ebc298a9245792531f26f0cece2460639e8bc39cb7f706a826a779b4cf969b8a0e539c7f62fb3d30ad6aa8f80e30f1d128aafd68a2ce72ea0',
+  skem: '4995788ef4b9d6132b249ce59a77281493eb39af373d236a1fe415cb0c2d7beb',
+  skrm: 'f3ce7fdae57e1a310d87f1ebbde6f328be0a99cdbcadf4d6589cf29de4b8ffd2',
+  shared_secret: 'c0d26aeab536609a572b07695d933b589dcf363ff9d93c93adea537aeabb8cb8',
+  info: '4f6465206f6e2061204772656369616e2055726e',
+  key: '868c066ef58aae6dc589b6cfdd18f97e',
+  base_nonce: '4e0bc5018beba4bf004cca59',
+  exporter_secret: '14ad94af484a7ad3ef40e9f3be99ecc6fa9036df9d4920548424df127ee0d99f',
+  enc_vecs: [
+    {
+      seq: 0,
+      aad: '436f756e742d30',
+      nonce: '4e0bc5018beba4bf004cca59',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '5ad590bb8baa577f8619db35a36311226a896e7342a6d836d8b7bcd2f20b6c7f9076ac232e3ab2523f39513434'
+    },
+    {
+      seq: 1,
+      aad: '436f756e742d31',
+      nonce: '4e0bc5018beba4bf004cca58',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: 'fa6f037b47fc21826b610172ca9637e82d6e5801eb31cbd3748271affd4ecb06646e0329cbdf3c3cd655b28e82'
+    },
+    {
+      seq: 2,
+      aad: '436f756e742d32',
+      nonce: '4e0bc5018beba4bf004cca5b',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '895cabfac50ce6c6eb02ffe6c048bf53b7f7be9a91fc559402cbc5b8dcaeb52b2ccc93e466c28fb55fed7a7fec'
+    },
+  ]
+})
