@@ -315,8 +315,10 @@ def key_schedule_r(mode, shared_secret, info, psk = '', psk_id = '')
   ContextR.new(ks)
 end
 
+MODES = {0 => 'BASE', 1 => 'PSK', 2 =>'AUTH', 3 => 'AUTHPSK'}
+
 def test(vec)
-  puts "mode: #{vec[:mode]}"
+  puts "mode: #{vec[:mode]} (#{MODES[vec[:mode]]})"
   puts ''
 
   puts 'encap'
@@ -333,8 +335,8 @@ def test(vec)
   puts ''
 
   puts 'key schedule'
-  key_schedule_s_inst = key_schedule_s(vec[:mode], hex_to_str(vec[:shared_secret]), hex_to_str(vec[:info]))
-  key_schedule_r_inst = key_schedule_r(vec[:mode], hex_to_str(vec[:shared_secret]), hex_to_str(vec[:info]))
+  key_schedule_s_inst = key_schedule_s(vec[:mode], hex_to_str(vec[:shared_secret]), hex_to_str(vec[:info]), hex_to_str(vec[:psk]), hex_to_str(vec[:psk_id]))
+  key_schedule_r_inst = key_schedule_r(vec[:mode], hex_to_str(vec[:shared_secret]), hex_to_str(vec[:info]), hex_to_str(vec[:psk]), hex_to_str(vec[:psk_id]))
   puts 'key, base_nonce, exporter_secret (got):'
   puts key_schedule_s_inst.key.unpack1('H*'), key_schedule_s_inst.base_nonce.unpack1('H*'), key_schedule_s_inst.exporter_secret.unpack1('H*')
   puts 'key, base_nonce, exporter_secret (expected):'
@@ -368,6 +370,8 @@ test({
   key: '868c066ef58aae6dc589b6cfdd18f97e',
   base_nonce: '4e0bc5018beba4bf004cca59',
   exporter_secret: '14ad94af484a7ad3ef40e9f3be99ecc6fa9036df9d4920548424df127ee0d99f',
+  psk: '',
+  psk_id: '',
   enc_vecs: [
     {
       seq: 0,
@@ -389,6 +393,43 @@ test({
       nonce: '4e0bc5018beba4bf004cca5b',
       pt: '4265617574792069732074727574682c20747275746820626561757479',
       ct: '895cabfac50ce6c6eb02ffe6c048bf53b7f7be9a91fc559402cbc5b8dcaeb52b2ccc93e466c28fb55fed7a7fec'
+    },
+  ]
+})
+
+test({
+  mode: MODE_PSK,
+  pkrm: '040d97419ae99f13007a93996648b2674e5260a8ebd2b822e84899cd52d87446ea394ca76223b76639eccdf00e1967db10ade37db4e7db476261fcc8df97c5ffd1',
+  skem: '57427244f6cc016cddf1c19c8973b4060aa13579b4c067fd5d93a5d74e32a90f',
+  skrm: '438d8bcef33b89e0e9ae5eb0957c353c25a94584b0dd59c991372a75b43cb661',
+  shared_secret: '2e783ad86a1beae03b5749e0f3f5e9bb19cb7eb382f2fb2dd64c99f15ae0661b',
+  info: '4f6465206f6e2061204772656369616e2055726e',
+  key: '55d9eb9d26911d4c514a990fa8d57048',
+  base_nonce: 'b595dc6b2d7e2ed23af529b1',
+  exporter_secret: '895a723a1eab809804973a53c0ee18ece29b25a7555a4808277ad2651d66d705',
+  psk: '0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82',
+  psk_id: '456e6e796e20447572696e206172616e204d6f726961',
+  enc_vecs: [
+    {
+      seq: 0,
+      aad: '436f756e742d30',
+      nonce: 'b595dc6b2d7e2ed23af529b1',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '90c4deb5b75318530194e4bb62f890b019b1397bbf9d0d6eb918890e1fb2be1ac2603193b60a49c2126b75d0eb'
+    },
+    {
+      seq: 1,
+      aad: '436f756e742d31',
+      nonce: 'b595dc6b2d7e2ed23af529b0',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '9e223384a3620f4a75b5a52f546b7262d8826dea18db5a365feb8b997180b22d72dc1287f7089a1073a7102c27'
+    },
+    {
+      seq: 2,
+      aad: '436f756e742d32',
+      nonce: 'b595dc6b2d7e2ed23af529b3',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: 'adf9f6000773035023be7d415e13f84c1cb32a24339a32eb81df02be9ddc6abc880dd81cceb7c1d0c7781465b2'
     },
   ]
 })
