@@ -23,11 +23,28 @@ MODE_BASE     = 0x00
 MODE_PSK      = 0x01
 MODE_AUTH     = 0x02
 MODE_AUTH_PSK = 0x03
+MODES = {0 => 'BASE', 1 => 'PSK', 2 =>'AUTH', 3 => 'AUTHPSK'}
+
+# A.3. DHKEM(P-256, HKDF-SHA256), HKDF-SHA256, AES-128-GCM
 KEM_ID = 16
 KDF_ID = 1
 AEAD_ID = 1
 KEM_SUITE_ID  = 'KEM' + i2osp(KEM_ID, 2)
 HPKE_SUITE_ID = 'HPKE' + i2osp(KEM_ID, 2) + i2osp(KDF_ID, 2) + i2osp(AEAD_ID, 2)
+
+# KEM constants: see 7.1
+N_SECRET = 32
+N_ENC = 65
+N_PK = 65
+N_SK = 32
+
+# KDF constants: see 7.2
+N_H = 32
+
+# AEAD constants: see 7.3
+N_K = 16
+N_N = 12
+N_T = 16
 
 def xor(a, b)
   if a.length != b.length
@@ -77,13 +94,12 @@ end
 def extract_and_expand(dh, kem_context, suite_id)
   eae_prk = labeled_extract('', 'eae_prk', dh, suite_id)
 
-  n_secret = 32 # this is based on length of SHA-256, which is 32 bytes
-  labeled_expand(eae_prk, 'shared_secret', kem_context, n_secret, suite_id)
+  labeled_expand(eae_prk, 'shared_secret', kem_context, N_SECRET, suite_id)
 end
 
 def generate_key_pair
   # OpenSSL::PKey::EC.generate('prime256v1')
-  derive_key_pair(SecureRandom.random_bytes(32))
+  derive_key_pair(SecureRandom.random_bytes(N_SK))
 end
 
 def derive_key_pair_from_num(n)
@@ -102,7 +118,6 @@ end
 
 def serialize_public_key(pk)
   pk.public_key.to_bn.to_s(2)
-  # pk.public_key.to_bn.to_s(16).downcase
 end
 
 def deserialize_public_key(serialized_pk)
@@ -216,8 +231,6 @@ end
 class Context
   attr_reader :key, :base_nonce, :sequence_number, :exporter_secret
 
-  N_N = 12
-
   def initialize(initializer_hash)
     @key = initializer_hash[:key]
     @base_nonce = initializer_hash[:base_nonce]
@@ -261,7 +274,7 @@ end
 class ContextR < Context
   def open(aad, ct)
     pt = cipher_open(@key, compute_nonce(@sequence_number), aad, ct)
-    # catch openerror then send out own openerror
+    # TODO: catch openerror then send out own openerror
     increment_seq
     pt
   end
@@ -269,8 +282,8 @@ class ContextR < Context
   private
 
   def cipher_open(key, nonce, aad, ct)
-    ct_body = ct[0, ct.length - 16] # TODO: tag length might vary based on GCM length
-    tag = ct[-16, 16]
+    ct_body = ct[0, ct.length - N_T]
+    tag = ct[-N_T, N_T]
     cipher = OpenSSL::Cipher.new('aes-128-gcm')
     cipher.decrypt
     cipher.key = key
@@ -291,9 +304,9 @@ def key_schedule(mode, shared_secret, info, psk = '', psk_id = '')
 
   secret = labeled_extract(shared_secret, 'secret', psk, HPKE_SUITE_ID)
 
-  key = labeled_expand(secret, 'key', key_schedule_context, 16, HPKE_SUITE_ID) # Nk
-  base_nonce = labeled_expand(secret, 'base_nonce', key_schedule_context, 12, HPKE_SUITE_ID) # Nn
-  exporter_secret = labeled_expand(secret, 'exp', key_schedule_context, 32, HPKE_SUITE_ID) # Nh
+  key = labeled_expand(secret, 'key', key_schedule_context, N_K, HPKE_SUITE_ID)
+  base_nonce = labeled_expand(secret, 'base_nonce', key_schedule_context, N_N, HPKE_SUITE_ID)
+  exporter_secret = labeled_expand(secret, 'exp', key_schedule_context, N_H, HPKE_SUITE_ID)
 
   {
     key: key,
@@ -312,8 +325,6 @@ def key_schedule_r(mode, shared_secret, info, psk = '', psk_id = '')
   ks = key_schedule(mode, shared_secret, info, psk, psk_id)
   ContextR.new(ks)
 end
-
-MODES = {0 => 'BASE', 1 => 'PSK', 2 =>'AUTH', 3 => 'AUTHPSK'}
 
 def test(vec)
   puts "mode: #{vec[:mode]} (#{MODES[vec[:mode]]})"
