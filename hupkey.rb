@@ -47,12 +47,12 @@ N_N = 12
 N_T = 16
 
 def xor(a, b)
-  if a.length != b.length
+  if a.bytesize != b.bytesize
     return false
   end
   c = ""
-  for i in 0 .. (a.length - 1)
-    c += (a[i].ord ^ b[i].ord).chr
+  for i in 0 .. (a.bytesize - 1)
+    c += (a.bytes[i] ^ b.bytes[i]).chr
   end
   c
 end
