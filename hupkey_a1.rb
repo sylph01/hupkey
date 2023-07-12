@@ -14,7 +14,7 @@ def i2osp(n, w)
 end
 
 def os2ip(x)
-  x.chars.map(&:ord).reduce {|a, b| a * 256 + b}
+  x.bytes.reduce {|a, b| a * 256 + b}
 end
 
 DEFAULT_PSK = ''
