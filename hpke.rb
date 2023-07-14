@@ -5,7 +5,7 @@ require_relative 'util'
 class HPKE
   include Util
 
-  attr_reader :aead_name, :n_k, :n_n, :n_t
+  attr_reader :kem, :aead_name, :n_k, :n_n, :n_t
 
   MODES = {
     base: 0x00,
@@ -53,13 +53,21 @@ class HPKE
       kdf_id: 3
     }
   }
+  KEM_CURVES = {
+    p_256: DHKEM::EC::P_256,
+    p_384: DHKEM::EC::P_384,
+    p_521: DHKEM::EC::P_521,
+    x25519: DHKEM::X25519,
+    x448: DHKEM::X448
+  }
 
   # TODO: maybe take 4 hashes and generate KEM inside this?
-  def initialize(kem, kdf_hash, aead_cipher)
-    raise Exception.new('Wrong AEAD cipher name') if CIPHERS[aead_cipher].nil?
+  def initialize(kem_curve_name, kem_hash, kdf_hash, aead_cipher)
+    raise Exception.new('Unsupported KEM curve name') if KEM_CURVES[kem_curve_name].nil?
+    raise Exception.new('Unsupported AEAD cipher name') if CIPHERS[aead_cipher].nil?
 
+    @kem = KEM_CURVES[kem_curve_name].new(kem_hash)
     @hkdf = HKDF.new(kdf_hash)
-    @kem = kem
     @aead_name = CIPHERS[aead_cipher][:name]
     @aead_id = CIPHERS[aead_cipher][:aead_id]
     @n_k = CIPHERS[aead_cipher][:n_k]
