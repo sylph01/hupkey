@@ -9,8 +9,8 @@ class HPKE
 
   MODES = {
     base: 0x00,
-    auth: 0x01,
-    psk: 0x02,
+    psk: 0x01,
+    auth: 0x02,
     auth_psk: 0x03
   }
   CIPHERS = {
@@ -54,12 +54,12 @@ class HPKE
     }
   }
 
-  def initialize(mode, kem, kdf_hash, aead_cipher)
-    raise Exception.new('Wrong mode') if !MODES.keys.include?(mode)
+  # TODO: maybe take 4 hashes and generate KEM inside this?
+  def initialize(kem, kdf_hash, aead_cipher)
     raise Exception.new('Wrong AEAD cipher name') if CIPHERS[aead_cipher].nil?
 
     @hkdf = HKDF.new(kdf_hash)
-    @dhkem = kem
+    @kem = kem
     @aead_name = CIPHERS[aead_cipher][:name]
     @aead_id = CIPHERS[aead_cipher][:aead_id]
     @n_k = CIPHERS[aead_cipher][:n_k]
@@ -68,7 +68,7 @@ class HPKE
   end
 
   def suite_id
-    'HPKE' + i2osp(kem.kem_id, 2) + i2osp(@dhkem.kdf_id, 2) + i2osp(@aead_id, 2)
+    'HPKE' + i2osp(@kem.kem_id, 2) + i2osp(@hkdf.kdf_id, 2) + i2osp(@aead_id, 2)
   end
 
   DEFAULT_PSK = ''
@@ -79,14 +79,15 @@ class HPKE
     got_psk_id = (psk_id != DEFAULT_PSK_ID)
 
     raise Exception.new('Inconsistent PSK inputs') if got_psk != got_psk_id
-    raise Exception.new('PSK input provided when not needed') if got_psk && [MODE_BASE, MODE_AUTH].include?(mode)
-    raise Exception.new('Missing required PSK input') if !got_psk && [MODE_PSK, MODE_AUTH_PSK].include?(mode)
+    raise Exception.new('PSK input provided when not needed') if got_psk && [MODES[:base], MODES[:auth]].include?(mode)
+    raise Exception.new('Missing required PSK input') if !got_psk && [MODES[:psk], MODES[:auth_psk]].include?(mode)
 
     true
   end
 
+  # public facing APIs
   def setup_base_s(pk_r, info)
-    encap_result = @dhkem.encap(pk_r)
+    encap_result = @kem.encap(pk_r)
     {
       enc: encap_result[:enc],
       key_schedule_s: key_schedule_s(MODES[:base], encap_result[:shared_secret], info, DEFAULT_PSK, DEFAULT_PSK_ID)
@@ -94,10 +95,83 @@ class HPKE
   end
 
   def setup_base_r(enc, sk_r, info)
-    shared_secret = @dhkem.decap(enc, sk_r)
+    shared_secret = @kem.decap(enc, sk_r)
     key_schedule_r(MODES[:base], shared_secret, info, DEFAULT_PSK, DEFAULT_PSK_ID)
   end
 
+  def setup_psk_s(pk_r, info, psk, psk_id)
+    encap_result = @kem.encap(pk_r)
+    {
+      enc: encap_result[:enc],
+      key_schedule_s: key_schedule_s(MODES[:psk], encap_result[:shared_secret], info, psk, psk_id)
+    }
+  end
+
+  def setup_psk_r(enc, sk_r, info, psk, psk_id)
+    shared_secret = @kem.decap(enc, sk_r)
+    key_schedule_r(MODES[:psk], shared_secret, info, psk, psk_id)
+  end
+
+  def setup_auth_s(pk_r, info, sk_s)
+    encap_result = @kem.auth_encap(pk_r, sk_s)
+    {
+      enc: encap_result[:enc],
+      key_schedule_s: key_schedule_s(MODES[:auth], encap_result[:shared_secret], info, DEFAULT_PSK, DEFAULT_PSK_ID)
+    }
+  end
+
+  def setup_auth_r(enc, sk_r, info, pk_s)
+    shared_secret = @kem.auth_decap(enc, sk_r, pk_s)
+    key_schedule_r(MODES[:auth], shared_secret, info, DEFAULT_PSK, DEFAULT_PSK_ID)
+  end
+
+  def setup_auth_psk_s(pk_r, info, psk, psk_id, sk_s)
+    encap_result = @kem.auth_encap(pk_r, sk_s)
+    {
+      enc: encap_result[:enc],
+      key_schedule_s: key_schedule_s(MODES[:auth_psk], encap_result[:shared_secret], info, psk, psk_id)
+    }
+  end
+
+  def setup_auth_psk_r(enc, sk_r, info, psk, psk_id, pk_s)
+    shared_secret = @kem.auth_decap(enc, sk_r, pk_s)
+    key_schedule_r(MODES[:auth_psk], shared_secret, info, psk, psk_id)
+  end
+
+  # for testing purposes
+  def setup_base_s_fixed(pk_r, info, ikm_e)
+    encap_result = @kem.encap_fixed(pk_r, ikm_e)
+    {
+      enc: encap_result[:enc],
+      key_schedule_s: key_schedule_s(MODES[:base], encap_result[:shared_secret], info, DEFAULT_PSK, DEFAULT_PSK_ID)
+    }
+  end
+
+  def setup_psk_s_fixed(pk_r, info, psk, psk_id, ikm_e)
+    encap_result = @kem.encap_fixed(pk_r, ikm_e)
+    {
+      enc: encap_result[:enc],
+      key_schedule_s: key_schedule_s(MODES[:psk], encap_result[:shared_secret], info, psk, psk_id)
+    }
+  end
+
+  def setup_auth_s_fixed(pk_r, info, sk_s, ikm_e)
+    encap_result = @kem.auth_encap_fixed(pk_r, sk_s, ikm_e)
+    {
+      enc: encap_result[:enc],
+      key_schedule_s: key_schedule_s(MODES[:auth], encap_result[:shared_secret], info, DEFAULT_PSK, DEFAULT_PSK_ID)
+    }
+  end
+
+  def setup_auth_psk_s_fixed(pk_r, info, psk, psk_id, sk_s, ikm_e)
+    encap_result = @kem.auth_encap_fixed(pk_r, sk_s, ikm_e)
+    {
+      enc: encap_result[:enc],
+      key_schedule_s: key_schedule_s(MODES[:auth_psk], encap_result[:shared_secret], info, psk, psk_id)
+    }
+  end
+
+  # maybe private
   def key_schedule(mode, shared_secret, info, psk = '', psk_id = '')
     verify_psk_inputs(mode, psk, psk_id)
 
@@ -131,6 +205,7 @@ class HPKE
 end
 
 class HPKE::Context
+  include Util
   attr_reader :key, :base_nonce, :sequence_number, :exporter_secret
 
   def initialize(initializer_hash, hpke)
@@ -142,7 +217,7 @@ class HPKE::Context
   end
 
   def compute_nonce(seq)
-    seq_bytes = i2osp(seq, N_N)
+    seq_bytes = i2osp(seq, @hpke.n_n)
     xor(@base_nonce, seq_bytes)
   end
 

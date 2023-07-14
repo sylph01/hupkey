@@ -1,9 +1,12 @@
 require 'openssl'
+require 'securerandom'
 require_relative 'hkdf'
 require_relative 'util'
 
 class DHKEM
   include Util
+
+  attr_reader :kem_id
 
   def initialize(hash_name)
     @hkdf = HKDF.new(hash_name)
@@ -104,7 +107,15 @@ class DHKEM
     @hkdf.labeled_expand(eae_prk, 'shared_secret', kem_context, n_secret, suite_id)
   end
 
+  def generate_key_pair
+    derive_key_pair(SecureRandom.random_bytes(n_sk))
+  end
+
   # ---- functions for Edwards curves (X25519, X448) ----
+  def dh(sk, pk)
+    sk.derive(pk)
+  end
+
   def derive_key_pair(ikm)
     dkp_prk = @hkdf.labeled_extract('', 'dkp_prk', ikm, kem_suite_id)
     sk = @hkdf.labeled_expand(dkp_prk, 'sk', '', n_sk, kem_suite_id)
@@ -141,6 +152,10 @@ class DHKEM
 end
 
 class DHKEM::EC < DHKEM
+  def dh(sk, pk)
+    sk.dh_compute_key(pk.public_key)
+  end
+
   def derive_key_pair(ikm)
     dkp_prk = @hkdf.labeled_extract('', 'dkp_prk', ikm, kem_suite_id)
     sk = 0
