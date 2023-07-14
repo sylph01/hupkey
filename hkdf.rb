@@ -64,6 +64,8 @@ class HKDF
 end
 
 class HKDF::HMAC_SHA256 < HKDF
+  private
+
   def digest_algorithm
     'SHA256'
   end
@@ -74,6 +76,8 @@ class HKDF::HMAC_SHA256 < HKDF
 end
 
 class HKDF::HMAC_SHA384 < HKDF
+  private
+
   def digest_algorithm
     'SHA384'
   end
@@ -84,6 +88,8 @@ class HKDF::HMAC_SHA384 < HKDF
 end
 
 class HKDF::HMAC_SHA512 < HKDF
+  private
+  
   def digest_algorithm
     'SHA512'
   end

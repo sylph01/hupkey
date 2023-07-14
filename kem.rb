@@ -12,10 +12,6 @@ class DHKEM
     @hkdf = HKDF.new(hash_name)
   end
 
-  def kem_suite_id
-    'KEM' + i2osp(kem_id, 2)
-  end
-
   def encap(pk_r)
     pkey_e = generate_key_pair()
     dh = pkey_e.derive(pk_r)
@@ -33,37 +29,6 @@ class DHKEM
 
   def auth_encap(pk_r, sk_s)
     pkey_e = generate_key_pair()
-    dh = pkey_e.derive(pk_r) + sk_s.derive(pk_r)
-    enc = serialize_public_key(pkey_e)
-
-    pkrm = serialize_public_key(pk_r)
-    pksm = serialize_public_key(sk_s)
-    kem_context = enc + pkrm + pksm
-
-    shared_secret = extract_and_expand(dh, kem_context, kem_suite_id)
-    {
-      shared_secret: shared_secret,
-      enc: enc
-    }
-  end
-
-  def encap_fixed(pk_r, ikm_e)
-    pkey_e = create_key_pair_from_secret(hex_to_str(ikm_e))
-    dh = pkey_e.derive(pk_r)
-    enc = serialize_public_key(pkey_e)
-
-    pkrm = serialize_public_key(pk_r)
-    kem_context = enc + pkrm
-
-    shared_secret = extract_and_expand(dh, kem_context, kem_suite_id)
-    {
-      shared_secret: shared_secret,
-      enc: enc
-    }
-  end
-
-  def auth_encap_fixed(pk_r, sk_s, ikm_e)
-    pkey_e = create_key_pair_from_secret(hex_to_str(ikm_e))
     dh = pkey_e.derive(pk_r) + sk_s.derive(pk_r)
     enc = serialize_public_key(pkey_e)
 
@@ -101,10 +66,35 @@ class DHKEM
     shared_secret
   end
 
-  def extract_and_expand(dh, kem_context, suite_id)
-    eae_prk = @hkdf.labeled_extract('', 'eae_prk', dh, suite_id)
+  def encap_fixed(pk_r, ikm_e)
+    pkey_e = create_key_pair_from_secret(ikm_e)
+    dh = pkey_e.derive(pk_r)
+    enc = serialize_public_key(pkey_e)
 
-    @hkdf.labeled_expand(eae_prk, 'shared_secret', kem_context, n_secret, suite_id)
+    pkrm = serialize_public_key(pk_r)
+    kem_context = enc + pkrm
+
+    shared_secret = extract_and_expand(dh, kem_context, kem_suite_id)
+    {
+      shared_secret: shared_secret,
+      enc: enc
+    }
+  end
+
+  def auth_encap_fixed(pk_r, sk_s, ikm_e)
+    pkey_e = create_key_pair_from_secret(ikm_e)
+    dh = pkey_e.derive(pk_r) + sk_s.derive(pk_r)
+    enc = serialize_public_key(pkey_e)
+
+    pkrm = serialize_public_key(pk_r)
+    pksm = serialize_public_key(sk_s)
+    kem_context = enc + pkrm + pksm
+
+    shared_secret = extract_and_expand(dh, kem_context, kem_suite_id)
+    {
+      shared_secret: shared_secret,
+      enc: enc
+    }
   end
 
   def generate_key_pair
@@ -112,10 +102,6 @@ class DHKEM
   end
 
   # ---- functions for Edwards curves (X25519, X448) ----
-  def dh(sk, pk)
-    sk.derive(pk)
-  end
-
   def derive_key_pair(ikm)
     dkp_prk = @hkdf.labeled_extract('', 'dkp_prk', ikm, kem_suite_id)
     sk = @hkdf.labeled_expand(dkp_prk, 'sk', '', n_sk, kem_suite_id)
@@ -149,13 +135,21 @@ class DHKEM
 
     OpenSSL::PKey.read(asn1_seq_pub.to_der)
   end
+
+  private
+  
+  def kem_suite_id
+    'KEM' + i2osp(kem_id, 2)
+  end
+
+  def extract_and_expand(dh, kem_context, suite_id)
+    eae_prk = @hkdf.labeled_extract('', 'eae_prk', dh, suite_id)
+
+    @hkdf.labeled_expand(eae_prk, 'shared_secret', kem_context, n_secret, suite_id)
+  end
 end
 
 class DHKEM::EC < DHKEM
-  def dh(sk, pk)
-    sk.dh_compute_key(pk.public_key)
-  end
-
   def derive_key_pair(ikm)
     dkp_prk = @hkdf.labeled_extract('', 'dkp_prk', ikm, kem_suite_id)
     sk = 0

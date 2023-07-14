@@ -12,7 +12,7 @@ def test(vec)
   puts "mode: #{vec[:mode]}"
   puts ''
 
-  ikme = vec[:skem]
+  ikme = [vec[:skem]].pack('H*')
   pkr = hpke.kem.deserialize_public_key([vec[:pkrm]].pack('H*'))
   skr = hpke.kem.create_key_pair_from_secret([vec[:skrm]].pack('H*'))
   if vec[:sksm]
