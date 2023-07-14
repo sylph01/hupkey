@@ -9,14 +9,15 @@ def test(vec)
   hpke = HPKE.new(vec[:kem_curve], vec[:kem_hash], vec[:kdf_hash], vec[:aead_cipher])
 
   puts "hpke: DHKEM(#{vec[:kem_curve]}, #{vec[:kem_hash]}), #{vec[:kdf_hash]}, #{vec[:aead_cipher]}"
-  p hpke
   puts "mode: #{vec[:mode]}"
   puts ''
 
   ikme = vec[:skem]
   pkr = hpke.kem.deserialize_public_key([vec[:pkrm]].pack('H*'))
   skr = hpke.kem.create_key_pair_from_secret([vec[:skrm]].pack('H*'))
-  sks = hpke.kem.create_key_pair_from_secret([vec[:sksm]].pack('H*'))
+  if vec[:sksm]
+    sks = hpke.kem.create_key_pair_from_secret([vec[:sksm]].pack('H*'))
+  end
   info_ = [vec[:info]].pack('H*')
 
   case vec[:mode]
@@ -443,6 +444,194 @@ test({
       nonce: '99d8b5c54669807e9fc70d0e',
       pt: '4265617574792069732074727574682c20747275746820626561757479',
       ct: '576d39dd2d4cc77d1a14a51d5c5f9d5e77586c3d8d2ab33bdec6379e28ce5c502f0b1cbd09047cf9eb9269bb52'
+    }
+  },
+  max_seq: 256
+})
+
+test({
+  kem_curve: :x25519,
+  kem_hash: :sha256,
+  kdf_hash: :sha256,
+  aead_cipher: :chacha20_poly1305,
+  mode: MODE_BASE,
+  pkrm: '4310ee97d88cc1f088a5576c77ab0cf5c3ac797f3d95139c6c84b5429c59662a',
+  skem: 'f4ec9b33b792c372c1d2c2063507b684ef925b8c75a42dbcbf57d63ccd381600',
+  skrm: '8057991eef8f1f1af18f4a9491d16a1ce333f695d4db8e38da75975c4478e0fb',
+  shared_secret: '0bbe78490412b4bbea4812666f7916932b828bba79942424abb65244930d69a7',
+  info: '4f6465206f6e2061204772656369616e2055726e',
+  key: 'ad2744de8e17f4ebba575b3f5f5a8fa1f69c2a07f6e7500bc60ca6e3e3ec1c91',
+  base_nonce: '5c4d98150661b848853b547f',
+  exporter_secret: 'a3b010d4994890e2c6968a36f64470d3c824c8f5029942feb11e7a74b2921922',
+  psk: '',
+  psk_id: '',
+  enc_vecs: {
+    0 => {
+      seq: 0,
+      aad: '436f756e742d30',
+      nonce: '5c4d98150661b848853b547f',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '1c5250d8034ec2b784ba2cfd69dbdb8af406cfe3ff938e131f0def8c8b60b4db21993c62ce81883d2dd1b51a28'
+    },
+    1 => {
+      aad: '436f756e742d31',
+      nonce: '5c4d98150661b848853b547e',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '6b53c051e4199c518de79594e1c4ab18b96f081549d45ce015be002090bb119e85285337cc95ba5f59992dc98c'
+    },
+    2 => {
+      aad: '436f756e742d32',
+      nonce: '5c4d98150661b848853b547d',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '71146bd6795ccc9c49ce25dda112a48f202ad220559502cef1f34271e0cb4b02b4f10ecac6f48c32f878fae86b'
+    },
+    255 => {
+      aad: '436f756e742d323535',
+      nonce: '5c4d98150661b848853b5480',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '18ab939d63ddec9f6ac2b60d61d36a7375d2070c9b683861110757062c52b8880a5f6b3936da9cd6c23ef2a95c'
+    }
+  },
+  max_seq: 256
+})
+
+test({
+  kem_curve: :x25519,
+  kem_hash: :sha256,
+  kdf_hash: :sha256,
+  aead_cipher: :chacha20_poly1305,
+  mode: MODE_PSK,
+  pkrm: '13640af826b722fc04feaa4de2f28fbd5ecc03623b317834e7ff4120dbe73062',
+  skem: '0c35fdf49df7aa01cd330049332c40411ebba36e0c718ebc3edf5845795f6321',
+  skrm: '77d114e0212be51cb1d76fa99dd41cfd4d0166b08caa09074430a6c59ef17879',
+  shared_secret: '4be079c5e77779d0215b3f689595d59e3e9b0455d55662d1f3666ec606e50ea7',
+  info: '4f6465206f6e2061204772656369616e2055726e',
+  key: '600d2fdb0313a7e5c86a9ce9221cd95bed069862421744cfb4ab9d7203a9c019',
+  base_nonce: '112e0465562045b7368653e7',
+  exporter_secret: '73b506dc8b6b4269027f80b0362def5cbb57ee50eed0c2873dac9181f453c5ac',
+  psk: '0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82',
+  psk_id: '456e6e796e20447572696e206172616e204d6f726961',
+  enc_vecs: {
+    0 => {
+      seq: 0,
+      aad: '436f756e742d30',
+      nonce: '112e0465562045b7368653e7',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '4a177f9c0d6f15cfdf533fb65bf84aecdc6ab16b8b85b4cf65a370e07fc1d78d28fb073214525276f4a89608ff'
+    },
+    1 => {
+      aad: '436f756e742d31',
+      nonce: '112e0465562045b7368653e6',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '5c3cabae2f0b3e124d8d864c116fd8f20f3f56fda988c3573b40b09997fd6c769e77c8eda6cda4f947f5b704a8'
+    },
+    2 => {
+      aad: '436f756e742d32',
+      nonce: '112e0465562045b7368653e5',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '14958900b44bdae9cbe5a528bf933c5c990dbb8e282e6e495adf8205d19da9eb270e3a6f1e0613ab7e757962a4'
+    },
+    255 => {
+      aad: '436f756e742d323535',
+      nonce: '112e0465562045b736865318',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '2414d0788e4bc39a59a26d7bd5d78e111c317d44c37bd5a4c2a1235f2ddc2085c487d406490e75210c958724a7'
+    }
+  },
+  max_seq: 256
+})
+
+test({
+  kem_curve: :x25519,
+  kem_hash: :sha256,
+  kdf_hash: :sha256,
+  aead_cipher: :chacha20_poly1305,
+  mode: MODE_AUTH,
+  pkrm: '1a478716d63cb2e16786ee93004486dc151e988b34b475043d3e0175bdb01c44',
+  skem: 'c94619e1af28971c8fa7957192b7e62a71ca2dcdde0a7cc4a8a9e741d600ab13',
+  skrm: '3ca22a6d1cda1bb9480949ec5329d3bf0b080ca4c45879c95eddb55c70b80b82',
+  sksm: '2def0cb58ffcf83d1062dd085c8aceca7f4c0c3fd05912d847b61f3e54121f05',
+  pksm: 'f0f4f9e96c54aeed3f323de8534fffd7e0577e4ce269896716bcb95643c8712b',
+  shared_secret: 'd2d67828c8bc9fa661cf15a31b3ebf1febe0cafef7abfaaca580aaf6d471e3eb',
+  info: '4f6465206f6e2061204772656369616e2055726e',
+  key: 'b071fd1136680600eb447a845a967d35e9db20749cdf9ce098bcc4deef4b1356',
+  base_nonce: 'd20577dff16d7cea2c4bf780',
+  exporter_secret: 'be2d93b82071318cdb88510037cf504344151f2f9b9da8ab48974d40a2251dd7',
+  psk: '',
+  psk_id: '',
+  enc_vecs: {
+    0 => {
+      seq: 0,
+      aad: '436f756e742d30',
+      nonce: 'd20577dff16d7cea2c4bf780',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: 'ab1a13c9d4f01a87ec3440dbd756e2677bd2ecf9df0ce7ed73869b98e00c09be111cb9fdf077347aeb88e61bdf'
+    },
+    1 => {
+      aad: '436f756e742d31',
+      nonce: 'd20577dff16d7cea2c4bf781',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '3265c7807ffff7fdace21659a2c6ccffee52a26d270c76468ed74202a65478bfaedfff9c2b7634e24f10b71016'
+    },
+    2 => {
+      aad: '436f756e742d32',
+      nonce: 'd20577dff16d7cea2c4bf782',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '3aadee86ad2a05081ea860033a9d09dbccb4acac2ded0891da40f51d4df19925f7a767b076a5cbc9355c8fd35e'
+    },
+    255 => {
+      aad: '436f756e742d323535',
+      nonce: 'd20577dff16d7cea2c4bf77f',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '652e597ba20f3d9241cda61f33937298b1169e6adf72974bbe454297502eb4be132e1c5064702fc165c2ddbde8'
+    }
+  },
+  max_seq: 256
+})
+
+test({
+  kem_curve: :x25519,
+  kem_hash: :sha256,
+  kdf_hash: :sha256,
+  aead_cipher: :chacha20_poly1305,
+  mode: MODE_AUTH_PSK,
+  pkrm: 'a5099431c35c491ec62ca91df1525d6349cb8aa170c51f9581f8627be6334851',
+  skem: '5e6dd73e82b856339572b7245d3cbb073a7561c0bee52873490e305cbb710410',
+  skrm: '7b36a42822e75bf3362dfabbe474b3016236408becb83b859a6909e22803cb0c',
+  sksm: '90761c5b0a7ef0985ed66687ad708b921d9803d51637c8d1cb72d03ed0f64418',
+  pksm: '3ac5bd4dd66ff9f2740bef0d6ccb66daa77bff7849d7895182b07fb74d087c45',
+  shared_secret: '86a6c0ed17714f11d2951747e660857a5fd7616c933ef03207808b7a7123fe67',
+  info: '4f6465206f6e2061204772656369616e2055726e',
+  key: '49c7e6d7d2d257aded2a746fe6a9bf12d4de8007c4862b1fdffe8c35fb65054c',
+  base_nonce: 'abac79931e8c1bcb8a23960a',
+  exporter_secret: '7c6cc1bb98993cd93e2599322247a58fd41fdecd3db895fb4c5fd8d6bbe606b5',
+  psk: '0247fd33b913760fa1fa51e1892d9f307fbe65eb171e8132c2af18555a738b82',
+  psk_id: '456e6e796e20447572696e206172616e204d6f726961',
+  enc_vecs: {
+    0 => {
+      seq: 0,
+      aad: '436f756e742d30',
+      nonce: 'abac79931e8c1bcb8a23960a',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '9aa52e29274fc6172e38a4461361d2342585d3aeec67fb3b721ecd63f059577c7fe886be0ede01456ebc67d597'
+    },
+    1 => {
+      aad: '436f756e742d31',
+      nonce: 'abac79931e8c1bcb8a23960b',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '59460bacdbe7a920ef2806a74937d5a691d6d5062d7daafcad7db7e4d8c649adffe575c1889c5c2e3a49af8e3e'
+    },
+    2 => {
+      aad: '436f756e742d32',
+      nonce: 'abac79931e8c1bcb8a239608',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '5688ff6a03ba26ae936044a5c800f286fb5d1eccdd2a0f268f6ff9773b51169318d1a1466bb36263415071db00'
+    },
+    255 => {
+      aad: '436f756e742d323535',
+      nonce: 'abac79931e8c1bcb8a2396f5',
+      pt: '4265617574792069732074727574682c20747275746820626561757479',
+      ct: '4d4c462f7b9b637eaf1f4e15e325b7bc629c0af6e3073422c86064cc3c98cff87300f054fd56dd57dc34358beb'
     }
   },
   max_seq: 256

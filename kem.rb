@@ -33,7 +33,7 @@ class DHKEM
 
   def auth_encap(pk_r, sk_s)
     pkey_e = generate_key_pair()
-    dh = pkey_e.dh_compute_key(pk_r.public_key) + sk_s.dh_compute_key(pk_r.public_key)
+    dh = pkey_e.derive(pk_r) + sk_s.derive(pk_r)
     enc = serialize_public_key(pkey_e)
 
     pkrm = serialize_public_key(pk_r)
@@ -64,7 +64,7 @@ class DHKEM
 
   def auth_encap_fixed(pk_r, sk_s, ikm_e)
     pkey_e = create_key_pair_from_secret(hex_to_str(ikm_e))
-    dh = pkey_e.dh_compute_key(pk_r.public_key) + sk_s.dh_compute_key(pk_r.public_key)
+    dh = pkey_e.derive(pk_r) + sk_s.derive(pk_r)
     enc = serialize_public_key(pkey_e)
 
     pkrm = serialize_public_key(pk_r)
@@ -91,7 +91,7 @@ class DHKEM
 
   def auth_decap(enc, sk_r, pk_s)
     pk_e = deserialize_public_key(enc)
-    dh = sk_r.dh_compute_key(pk_e.public_key) + sk_r.dh_compute_key(pk_s.public_key)
+    dh = sk_r.derive(pk_e) + sk_r.derive(pk_s)
 
     pkrm = serialize_public_key(sk_r)
     pksm = serialize_public_key(pk_s)
