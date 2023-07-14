@@ -88,3 +88,7 @@ load 'test_a3.rb'
 puts '------------------------'
 
 load 'test_a4.rb'
+
+puts '------------------------'
+
+load 'test_a6.rb'
