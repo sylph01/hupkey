@@ -61,7 +61,6 @@ class HPKE
     x448: DHKEM::X448
   }
 
-  # TODO: maybe take 4 hashes and generate KEM inside this?
   def initialize(kem_curve_name, kem_hash, kdf_hash, aead_cipher)
     raise Exception.new('Unsupported KEM curve name') if KEM_CURVES[kem_curve_name].nil?
     raise Exception.new('Unsupported AEAD cipher name') if CIPHERS[aead_cipher].nil?
@@ -73,24 +72,6 @@ class HPKE
     @n_k = CIPHERS[aead_cipher][:n_k]
     @n_n = CIPHERS[aead_cipher][:n_n]
     @n_t = CIPHERS[aead_cipher][:n_t]
-  end
-
-  def suite_id
-    'HPKE' + i2osp(@kem.kem_id, 2) + i2osp(@hkdf.kdf_id, 2) + i2osp(@aead_id, 2)
-  end
-
-  DEFAULT_PSK = ''
-  DEFAULT_PSK_ID = ''
-
-  def verify_psk_inputs(mode, psk, psk_id)
-    got_psk = (psk != DEFAULT_PSK)
-    got_psk_id = (psk_id != DEFAULT_PSK_ID)
-
-    raise Exception.new('Inconsistent PSK inputs') if got_psk != got_psk_id
-    raise Exception.new('PSK input provided when not needed') if got_psk && [MODES[:base], MODES[:auth]].include?(mode)
-    raise Exception.new('Missing required PSK input') if !got_psk && [MODES[:psk], MODES[:auth_psk]].include?(mode)
-
-    true
   end
 
   # public facing APIs
@@ -179,7 +160,26 @@ class HPKE
     }
   end
 
-  # maybe private
+  private
+
+  def suite_id
+    'HPKE' + i2osp(@kem.kem_id, 2) + i2osp(@hkdf.kdf_id, 2) + i2osp(@aead_id, 2)
+  end
+
+  DEFAULT_PSK = ''
+  DEFAULT_PSK_ID = ''
+
+  def verify_psk_inputs(mode, psk, psk_id)
+    got_psk = (psk != DEFAULT_PSK)
+    got_psk_id = (psk_id != DEFAULT_PSK_ID)
+
+    raise Exception.new('Inconsistent PSK inputs') if got_psk != got_psk_id
+    raise Exception.new('PSK input provided when not needed') if got_psk && [MODES[:base], MODES[:auth]].include?(mode)
+    raise Exception.new('Missing required PSK input') if !got_psk && [MODES[:psk], MODES[:auth_psk]].include?(mode)
+
+    true
+  end
+
   def key_schedule(mode, shared_secret, info, psk = '', psk_id = '')
     verify_psk_inputs(mode, psk, psk_id)
 
