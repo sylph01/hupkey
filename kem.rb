@@ -6,8 +6,6 @@ require_relative 'util'
 class DHKEM
   include Util
 
-  attr_reader :kem_id
-
   def initialize(hash_name)
     @hkdf = HKDF.new(hash_name)
   end
