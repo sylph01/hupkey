@@ -23,8 +23,4 @@ module Util
     end
     c
   end
-
-  def hex_to_str(hex)
-    [hex].pack('H*')
-  end
 end
