@@ -196,6 +196,8 @@ class DHKEM::EC::P_256 < DHKEM::EC
     0x0010
   end
 
+  private
+
   def n_secret
     32
   end
@@ -229,6 +231,8 @@ class DHKEM::EC::P_384 < DHKEM::EC
   def kem_id
     0x0011
   end
+
+  private
 
   def n_secret
     48
@@ -264,6 +268,8 @@ class DHKEM::EC::P_521 < DHKEM::EC
     0x0012
   end
 
+  private
+
   def n_secret
     64
   end
@@ -298,6 +304,8 @@ class DHKEM::X25519 < DHKEM
     0x0020
   end
 
+  private
+
   def n_secret
     32
   end
@@ -324,6 +332,8 @@ class DHKEM::X448 < DHKEM
     0x0021
   end
 
+  private
+
   def n_secret
     64
   end
@@ -344,31 +354,3 @@ class DHKEM::X448 < DHKEM
     '1.3.101.111'
   end
 end
-
-p256 = DHKEM::EC::P_256.new(:sha256)
-# ikm = '4270e54ffd08d79d5928020af4686d8f6b7d35dbe470265f1f5aa22816ce860e' # ikme
-# sk_obj, pk_obj = p256.derive_key_pair([ikm].pack('H*'))
-# puts sk_obj.public_key.to_bn.to_s(16).downcase
-
-# pkrm = '04fe8c19ce0905191ebc298a9245792531f26f0cece2460639e8bc39cb7f706a826a779b4cf969b8a0e539c7f62fb3d30ad6aa8f80e30f1d128aafd68a2ce72ea0'
-# skem = '4995788ef4b9d6132b249ce59a77281493eb39af373d236a1fe415cb0c2d7beb'
-# shared_secret = 'c0d26aeab536609a572b07695d933b589dcf363ff9d93c93adea537aeabb8cb8'
-# skrm = 'f3ce7fdae57e1a310d87f1ebbde6f328be0a99cdbcadf4d6589cf29de4b8ffd2'
-
-# puts 'encap'
-# pkr = p256.deserialize_public_key([pkrm].pack('H*'))
-# encap_result = p256.encap_fixed(pkr, skem)
-# puts "shared_secret(got): #{encap_result[:shared_secret].unpack1('H*')}"
-# puts "shared_secret(exp): #{shared_secret}"
-# puts ''
-
-# puts 'decap'
-# skr = p256.create_key_pair_from_secret([skrm].pack('H*'))
-# decapped_secret = p256.decap(encap_result[:enc], skr)
-# puts "decapped_secret: #{decapped_secret.unpack1('H*')}"
-# puts ''
-
-# x25519 = DHKEM::X25519.new(:sha256)
-# ikm = '7268600d403fce431561aef583ee1613527cff655c1343f29812e66706df3234' # ikme
-# sk_obj = x25519.derive_key_pair([ikm].pack('H*'))
-# puts x25519.serialize_public_key(sk_obj).unpack1('H*')
