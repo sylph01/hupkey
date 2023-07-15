@@ -46,33 +46,48 @@ def test(vec)
   end
 
   puts 'key, base_nonce, exporter_secret (got):'
-  puts kss.key.unpack1('H*'), kss.base_nonce.unpack1('H*'), kss.exporter_secret.unpack1('H*')
-  puts ksr.key.unpack1('H*'), ksr.base_nonce.unpack1('H*'), ksr.exporter_secret.unpack1('H*')
+  puts kss.key&.unpack1('H*'), kss.base_nonce&.unpack1('H*'), kss.exporter_secret.unpack1('H*')
+  puts ksr.key&.unpack1('H*'), ksr.base_nonce&.unpack1('H*'), ksr.exporter_secret.unpack1('H*')
   puts 'key, base_nonce, exporter_secret (expected):'
   puts vec[:key], vec[:base_nonce], vec[:exporter_secret]
 
-  for iter in 0..vec[:max_seq] do
-    if vec[:enc_vecs][iter]
-      enc_vec = vec[:enc_vecs][iter]
-      puts "seq: #{iter}"
-      puts "seq in key_schedule_s: #{kss.sequence_number}"
-      puts "computed nonce: #{kss.compute_nonce(iter).unpack1('H*')}"
-      puts "expected nonce: #{enc_vec[:nonce]}"
-
-      ct = kss.seal([enc_vec[:aad]].pack('H*'), [enc_vec[:pt]].pack('H*'))
-      puts "ct(got): #{ct.unpack1('H*')}"
-      puts "ct(exp): #{enc_vec[:ct]}"
-
-      pt = ksr.open([enc_vec[:aad]].pack('H*'), [enc_vec[:ct]].pack('H*'))
-      puts "pt(got): #{pt.unpack1('H*')}"
-      puts "pt(exp): #{enc_vec[:pt]}"
+  unless vec[:aead_cipher] == :export_only
+    # test encryption
+    for iter in 0..vec[:max_seq] do
+      if vec[:enc_vecs][iter]
+        enc_vec = vec[:enc_vecs][iter]
+        puts "seq: #{iter}"
+        puts "seq in key_schedule_s: #{kss.sequence_number}"
+        puts "computed nonce: #{kss.compute_nonce(iter).unpack1('H*')}"
+        puts "expected nonce: #{enc_vec[:nonce]}"
+  
+        ct = kss.seal([enc_vec[:aad]].pack('H*'), [enc_vec[:pt]].pack('H*'))
+        puts "ct(got): #{ct.unpack1('H*')}"
+        puts "ct(exp): #{enc_vec[:ct]}"
+  
+        pt = ksr.open([enc_vec[:aad]].pack('H*'), [enc_vec[:ct]].pack('H*'))
+        puts "pt(got): #{pt.unpack1('H*')}"
+        puts "pt(exp): #{enc_vec[:pt]}"
+  
+        puts ''
+      else
+        kss.increment_seq
+        ksr.increment_seq
+      end
+    end
+  else
+    # export only AEAD
+    vec[:enc_vecs].each do |enc_vec|
+      kss_exported_value = kss.export([enc_vec[:exporter_context]].pack('H*'), enc_vec[:l])
+      ksr_exported_value = ksr.export([enc_vec[:exporter_context]].pack('H*'), enc_vec[:l])
+      puts "kss_exported_value: #{kss_exported_value.unpack1('H*')}"
+      puts "ksr_exported_value: #{ksr_exported_value.unpack1('H*')}"
+      puts "expected: #{enc_vec[:exported_value]}"
 
       puts ''
-    else
-      kss.increment_seq
-      ksr.increment_seq
     end
   end
+
 end
 
 load 'test_a1.rb'
@@ -92,3 +107,7 @@ load 'test_a4.rb'
 puts '------------------------'
 
 load 'test_a6.rb'
+
+puts '------------------------'
+
+load 'test_a7.rb'

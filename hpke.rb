@@ -5,7 +5,7 @@ require_relative 'util'
 class HPKE
   include Util
 
-  attr_reader :kem, :aead_name, :n_k, :n_n, :n_t
+  attr_reader :kem, :hkdf, :aead_name, :n_k, :n_n, :n_t
 
   MODES = {
     base: 0x00,
@@ -160,6 +160,10 @@ class HPKE
     }
   end
 
+  def export(exporter_secret, exporter_context, len)
+    @hkdf.labeled_expand(exporter_secret, 'sec', exporter_context, len, suite_id)
+  end
+
   private
 
   def suite_id
@@ -189,8 +193,10 @@ class HPKE
 
     secret = @hkdf.labeled_extract(shared_secret, 'secret', psk, suite_id)
 
-    key = @hkdf.labeled_expand(secret, 'key', key_schedule_context, @n_k, suite_id)
-    base_nonce = @hkdf.labeled_expand(secret, 'base_nonce', key_schedule_context, @n_n, suite_id)
+    unless @aead_id == CIPHERS[:export_only][:aead_id]
+      key = @hkdf.labeled_expand(secret, 'key', key_schedule_context, @n_k, suite_id)
+      base_nonce = @hkdf.labeled_expand(secret, 'base_nonce', key_schedule_context, @n_n, suite_id)
+    end
     exporter_secret = @hkdf.labeled_expand(secret, 'exp', key_schedule_context, @hkdf.n_h, suite_id)
 
     {
@@ -234,10 +240,16 @@ class HPKE::Context
 
     @sequence_number += 1
   end
+
+  def export(exporter_context, len)
+    @hpke.export(@exporter_secret, exporter_context, len)
+  end
 end
 
 class HPKE::ContextS < HPKE::Context
   def seal(aad, pt)
+    raise Exception.new('AEAD is export only') if @hpke.aead_name == :export_only
+
     ct = cipher_seal(@key, compute_nonce(@sequence_number), aad, pt)
     increment_seq
     ct
@@ -259,6 +271,8 @@ end
 
 class HPKE::ContextR < HPKE::Context
   def open(aad, ct)
+    raise Exception.new('AEAD is export only') if @hpke.aead_name == :export_only
+
     pt = cipher_open(@key, compute_nonce(@sequence_number), aad, ct)
     # TODO: catch openerror then send out own openerror
     increment_seq
